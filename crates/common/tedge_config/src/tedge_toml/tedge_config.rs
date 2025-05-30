@@ -589,6 +589,77 @@ define_tedge_config! {
         topics: TemplatesSet,
     },
 
+    #[tedge_config(multi)]
+    thingsboard: {
+        /// Endpoint URL of Thingsboard tenant
+        #[tedge_config(example = "your-thingsboard-endpoint.com")]
+        url: ConnectUrl,
+
+        /// The path where Thingsboard root certificate(s) are stored
+        #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
+        #[tedge_config(example = "/etc/tedge/thingsboard-trusted-root-certificates.pem", default(function = "default_root_cert_path"))]
+        root_cert_path: AbsolutePath,
+
+        device: {
+            /// Identifier of the device within the fleet. It must be globally unique and is derived from the device certificate.
+            #[tedge_config(reader(function = "thingsboard_device_id"))]
+            #[tedge_config(default(from_optional_key = "device.id"))]
+            #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
+            #[doku(as = "String")]
+            id: Result<String, ReadError>,
+
+            /// Path where the device's private key is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(from_key = "device.key_path"))]
+            key_path: AbsolutePath,
+
+            /// Path where the device's certificate is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
+            cert_path: AbsolutePath,
+
+            /// Path where the device's certificate signing request is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
+            csr_path: AbsolutePath,
+
+            /// A PKCS#11 URI of the private key.
+            #[tedge_config(example = "pkcs11:model=PKCS%2315%20emulated")]
+            key_uri: Arc<str>,
+        },
+
+        mapper: {
+            /// Whether the Thingsboard mapper should add a timestamp or not
+            #[tedge_config(example = "true")]
+            #[tedge_config(default(value = true))]
+            timestamp: bool,
+
+            /// The format that will be used by the mapper when sending timestamps to Thingsboard
+            #[tedge_config(example = "rfc-3339")]
+            #[tedge_config(example = "unix")]
+            #[tedge_config(default(variable = "TimeFormat::Unix"))]
+            timestamp_format: TimeFormat,
+
+            mqtt: {
+                /// The maximum message payload size that can be mapped to the cloud via MQTT
+                #[tedge_config(example = "131072", default(function = "aws_mqtt_payload_limit"))]
+                max_payload_size: MqttPayloadLimit,
+            }
+        },
+
+        bridge: {
+            /// The topic prefix that will be used for the bridge MQTT topic.
+            #[tedge_config(example = "tb", default(from_str = "tb"))]
+            topic_prefix: TopicPrefix,
+
+            /// The amount of time after which the bridge should send a ping if no other traffic has occurred
+            #[tedge_config(example = "60s", default(from_str = "60s"))]
+            keepalive_interval: SecondsOrHumanTime,
+        },
+
+        /// Set of MQTT topics the Thingsboard mapper should subscribe to
+        #[tedge_config(example = "te/+/+/+/+/a/+,te/+/+/+/+/m/+,te/+/+/+/+/e/+")]
+        #[tedge_config(default(value = "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health"))]
+        topics: TemplatesSet,
+    },
+
     mqtt: {
         /// MQTT topic root
         #[tedge_config(default(value = "te"))]
@@ -948,7 +1019,16 @@ impl TEdgeConfigReader {
                     vec![]
                 })
             });
-            c8y_roots.chain(az_roots).chain(aws_roots).collect()
+            let tb_roots = self.thingsboard.entries().flat_map(|(key, tb)| {
+                read_trust_store(&tb.root_cert_path).unwrap_or_else(move |e| {
+                    error!(
+                        "Unable to read certificates from {}: {e:?}",
+                        ReadableKey::ThingsboardRootCertPath(key.map(<_>::to_owned))
+                    );
+                    vec![]
+                })
+            });
+            c8y_roots.chain(az_roots).chain(aws_roots).chain(tb_roots).collect()
         });
 
         let proxy = if let Some(address) = self.proxy.address.or_none() {
@@ -993,6 +1073,7 @@ impl TEdgeConfigReader {
             Cloud::C8y(profile) => self.c8y.try_get(profile)?,
             Cloud::Az(profile) => self.az.try_get(profile)?,
             Cloud::Aws(profile) => self.aws.try_get(profile)?,
+            Cloud::Thingsboard(profile) => self.thingsboard.try_get(profile)?,
         })
     }
 
@@ -1005,6 +1086,7 @@ impl TEdgeConfigReader {
             Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.key_path,
             Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.key_path,
             Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.key_path,
+            Some(Cloud::Thingsboard(profile)) => &self.thingsboard.try_get(profile)?.device.key_path,
         })
     }
 
@@ -1017,6 +1099,7 @@ impl TEdgeConfigReader {
             Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.cert_path,
             Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.cert_path,
             Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.cert_path,
+            Some(Cloud::Thingsboard(profile)) => &self.thingsboard.try_get(profile)?.device.cert_path,
         })
     }
 
@@ -1029,6 +1112,7 @@ impl TEdgeConfigReader {
             Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.csr_path,
             Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.csr_path,
             Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.csr_path,
+            Some(Cloud::Thingsboard(profile)) => &self.thingsboard.try_get(profile)?.device.csr_path,
         })
     }
 
@@ -1038,6 +1122,7 @@ impl TEdgeConfigReader {
             Some(Cloud::C8y(profile)) => self.c8y.try_get(profile)?.device.id()?,
             Some(Cloud::Az(profile)) => self.az.try_get(profile)?.device.id()?,
             Some(Cloud::Aws(profile)) => self.aws.try_get(profile)?.device.id()?,
+            Some(Cloud::Thingsboard(profile)) => self.thingsboard.try_get(profile)?.device.id()?,
         })
     }
 }
@@ -1047,6 +1132,7 @@ pub enum Cloud<'a> {
     C8y(Option<&'a ProfileName>),
     Az(Option<&'a ProfileName>),
     Aws(Option<&'a ProfileName>),
+    Thingsboard(Option<&'a ProfileName>),
 }
 
 pub trait CloudConfig {
@@ -1110,6 +1196,24 @@ impl CloudConfig for TEdgeConfigReaderAws {
     }
 }
 
+impl CloudConfig for TEdgeConfigReaderThingsboard {
+    fn device_key_path(&self) -> &Utf8Path {
+        &self.device.key_path
+    }
+
+    fn device_cert_path(&self) -> &Utf8Path {
+        &self.device.cert_path
+    }
+
+    fn root_cert_path(&self) -> &Utf8Path {
+        &self.root_cert_path
+    }
+
+    fn key_uri(&self) -> Option<Arc<str>> {
+        self.device.key_uri.or_none().cloned()
+    }
+}
+
 fn c8y_topic_prefix() -> TopicPrefix {
     TopicPrefix::try_new("c8y").unwrap()
 }
@@ -1120,6 +1224,10 @@ fn az_topic_prefix() -> TopicPrefix {
 
 fn aws_topic_prefix() -> TopicPrefix {
     TopicPrefix::try_new("aws").unwrap()
+}
+
+fn tb_topic_prefix() -> TopicPrefix {
+    TopicPrefix::try_new("tb").unwrap()
 }
 
 fn c8y_mqtt_payload_limit() -> MqttPayloadLimit {
@@ -1195,6 +1303,20 @@ fn aws_device_id(
 ) -> Result<String, ReadError> {
     match (
         device_id_from_cert(&aws_device.cert_path),
+        dto_value.or_none(),
+    ) {
+        (Ok(common_name), _) => Ok(common_name),
+        (Err(_), Some(dto_value)) => Ok(dto_value.to_string()),
+        (Err(err), None) => Err(err),
+    }
+}
+
+fn thingsboard_device_id(
+    tb_device: &TEdgeConfigReaderThingsboardDevice,
+    dto_value: &OptionalConfig<String>,
+) -> Result<String, ReadError> {
+    match (
+        device_id_from_cert(&tb_device.cert_path),
         dto_value.or_none(),
     ) {
         (Ok(common_name), _) => Ok(common_name),
