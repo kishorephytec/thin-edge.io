@@ -479,4 +479,73 @@ keepalive_interval 60
         assert_eq!(config_set, expected);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_serialize_thingsboard() -> anyhow::Result<()> {
+        let file = tempfile::NamedTempFile::new()?;
+        let bridge_root_cert_path = Utf8Path::from_path(file.path()).unwrap();
+
+        let config = BridgeConfig {
+            cloud_name: "thingsboard".into(),
+            config_file: "tb-bridge.conf".into(),
+            connection: "edge_to_tb".into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("thingsboard.cloud:8883")?,
+            remote_username: None,
+            remote_password: None,
+            bridge_root_cert_path: bridge_root_cert_path.to_owned(),
+            remote_clientid: "alpha".into(),
+            local_clientid: "Thingsboard".into(),
+            bridge_certfile: "./test-certificate.pem".into(),
+            bridge_keyfile: "./test-private-key.pem".into(),
+            use_mapper: true,
+            use_agent: false,
+            topics: vec!["tb/topic1".into(), "tb/topic2".into()],
+            try_private: false,
+            start_type: "automatic".into(),
+            clean_session: true,
+            include_local_clean_session: true,
+            local_clean_session: true,
+            notifications: false,
+            notifications_local_only: false,
+            notification_topic: "tb/notification".into(),
+            bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
+            connection_check_attempts: 1,
+            auth_type: AuthType::Certificate,
+            mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(60),
+            proxy: None,
+        };
+
+        let mut buffer = Vec::new();
+        config.serialize(&mut buffer).await?;
+
+        let contents = String::from_utf8(buffer)?;
+        let config_set: std::collections::HashSet<&str> = contents
+            .lines()
+            .filter(|str| !str.is_empty() && !str.starts_with('#'))
+            .collect();
+
+        let mut expected = std::collections::HashSet::new();
+        expected.insert("connection edge_to_tb");
+        expected.insert("address thingsboard.cloud:8883");
+        expected.insert("remote_clientid alpha");
+        expected.insert("local_clientid Thingsboard");
+        expected.insert("bridge_certfile ./test-certificate.pem");
+        expected.insert("bridge_keyfile ./test-private-key.pem");
+        expected.insert("try_private false");
+        expected.insert("start_type automatic");
+        expected.insert("cleansession true");
+        expected.insert("local_cleansession true");
+        expected.insert("notifications false");
+        expected.insert("notifications_local_only false");
+        expected.insert("notification_topic tb/notification");
+        expected.insert("bridge_attempt_unsubscribe false");
+        expected.insert("keepalive_interval 60");
+
+        expected.insert("topic tb/topic1");
+        expected.insert("topic tb/topic2");
+        assert_eq!(config_set, expected);
+        Ok(())
+    }
 }
