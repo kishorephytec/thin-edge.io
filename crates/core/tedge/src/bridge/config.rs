@@ -11,6 +11,9 @@ use tedge_config::TEdgeConfig;
 use tedge_utils::paths::DraftFile;
 use tokio::io::AsyncWriteExt;
 
+#[cfg(feature = "thingsboard")]
+use crate::bridge::thingsboard::BridgeConfigThingsboardParams;
+
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct BridgeConfig {

@@ -4,6 +4,8 @@ use crate::bridge::aws::BridgeConfigAwsParams;
 use crate::bridge::azure::BridgeConfigAzureParams;
 #[cfg(feature = "c8y")]
 use crate::bridge::c8y::BridgeConfigC8yParams;
+#[cfg(feature = "thingsboard")]
+use crate::bridge::thingsboard::BridgeConfigThingsboardParams;
 use crate::bridge::BridgeConfig;
 use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;

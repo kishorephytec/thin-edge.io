@@ -9,6 +9,8 @@ pub mod aws;
 pub mod azure;
 #[cfg(feature = "c8y")]
 pub mod c8y;
+#[cfg(feature = "thingsboard")]
+pub mod thingsboard;
 
 pub use common_mosquitto_config::*;
 pub use config::BridgeConfig;
