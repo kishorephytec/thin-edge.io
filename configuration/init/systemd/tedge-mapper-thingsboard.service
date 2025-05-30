@@ -1,0 +1,13 @@
+[Unit]
+Description=Thin-Edge Thingsboard Mapper
+After=network.target mosquitto.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/tedge-mapper-thingsboard
+Restart=on-failure
+User=tedge
+Group=tedge
+
+[Install]
+WantedBy=multi-user.target
