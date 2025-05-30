@@ -38,6 +38,15 @@ pub enum CloudArg {
         #[arg(add(ArgValueCandidates::new(profile_completions)))]
         profile: Option<ProfileName>,
     },
+    #[cfg(feature = "thingsboard")]
+    Thingsboard {
+        /// The cloud profile you wish to use
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
+        #[clap(long)]
+        #[arg(add(ArgValueCandidates::new(profile_completions)))]
+        profile: Option<ProfileName>,
+    },
 }
 
 impl TryFrom<CloudArg> for Cloud {
@@ -76,12 +85,18 @@ impl CloudArg {
             Self::C8y {
                 profile: Some(profile),
             } => Cloud::c8y(Some(profile)),
+            #[cfg(feature = "thingsboard")]
+            Self::Thingsboard {
+                profile: Some(profile),
+            } => Cloud::thingsboard(Some(profile)),
             #[cfg(feature = "aws")]
             Self::Aws { profile: None } => Cloud::aws(read_env()?),
             #[cfg(feature = "azure")]
             Self::Az { profile: None } => Cloud::az(read_env()?),
             #[cfg(feature = "c8y")]
             Self::C8y { profile: None } => Cloud::c8y(read_env()?),
+            #[cfg(feature = "thingsboard")]
+            Self::Thingsboard { profile: None } => Cloud::thingsboard(read_env()?),
         })
     }
 }
@@ -99,6 +114,8 @@ pub enum MaybeBorrowedCloud<'a> {
     Azure(Option<Cow<'a, ProfileName>>),
     #[cfg(feature = "aws")]
     Aws(Option<Cow<'a, ProfileName>>),
+    #[cfg(feature = "thingsboard")]
+    Thingsboard(Option<Cow<'a, ProfileName>>),
 }
 
 impl fmt::Display for MaybeBorrowedCloud<'_> {
@@ -113,6 +130,8 @@ impl fmt::Display for MaybeBorrowedCloud<'_> {
                 Self::Azure(_) => "Azure",
                 #[cfg(feature = "aws")]
                 Self::Aws(_) => "Aws",
+                #[cfg(feature = "thingsboard")]
+                Self::Thingsboard(_) => "Thingsboard",
             }
         )
     }
@@ -127,6 +146,10 @@ impl<'a> From<&'a MaybeBorrowedCloud<'a>> for tedge_config::tedge_toml::Cloud<'a
             MaybeBorrowedCloud::Azure(p) => tedge_config::tedge_toml::Cloud::Az(p.as_deref()),
             #[cfg(feature = "aws")]
             MaybeBorrowedCloud::Aws(p) => tedge_config::tedge_toml::Cloud::Aws(p.as_deref()),
+            #[cfg(feature = "thingsboard")]
+            MaybeBorrowedCloud::Thingsboard(p) => {
+                tedge_config::tedge_toml::Cloud::Thingsboard(p.as_deref())
+            }
         }
     }
 }
@@ -146,6 +169,11 @@ impl Cloud {
     pub fn aws(profile: Option<ProfileName>) -> Self {
         Self::Aws(profile.map(Cow::Owned))
     }
+
+    #[cfg(feature = "thingsboard")]
+    pub fn thingsboard(profile: Option<ProfileName>) -> Self {
+        Self::Thingsboard(profile.map(Cow::Owned))
+    }
 }
 
 impl<'a> CloudBorrow<'a> {
@@ -161,6 +189,10 @@ impl<'a> CloudBorrow<'a> {
     pub fn aws_borrowed(profile: Option<&'a ProfileName>) -> Self {
         Self::Aws(profile.map(Cow::Borrowed))
     }
+    #[cfg(feature = "thingsboard")]
+    pub fn thingsboard_borrowed(profile: Option<&'a ProfileName>) -> Self {
+        Self::Thingsboard(profile.map(Cow::Borrowed))
+    }
 }
 
 impl MaybeBorrowedCloud<'_> {
@@ -172,6 +204,8 @@ impl MaybeBorrowedCloud<'_> {
             Self::Azure(profile) => SystemService::TEdgeMapperAz(profile.as_deref()),
             #[cfg(feature = "c8y")]
             Self::C8y(profile) => SystemService::TEdgeMapperC8y(profile.as_deref()),
+            #[cfg(feature = "thingsboard")]
+            Self::Thingsboard(profile) => SystemService::TEdgeMapperThingsboard(profile.as_deref()),
         }
     }
 
@@ -189,6 +223,10 @@ impl MaybeBorrowedCloud<'_> {
             Self::Azure(None) => "az-bridge.conf".into(),
             #[cfg(feature = "azure")]
             Self::Azure(Some(profile)) => format!("az@{profile}-bridge.conf").into(),
+            #[cfg(feature = "thingsboard")]
+            Self::Thingsboard(None) => "tb-bridge.conf".into(),
+            #[cfg(feature = "thingsboard")]
+            Self::Thingsboard(Some(profile)) => format!("tb@{profile}-bridge.conf").into(),
         }
     }
 
@@ -200,6 +238,8 @@ impl MaybeBorrowedCloud<'_> {
             Self::Aws(profile) => profile.as_deref(),
             #[cfg(feature = "azure")]
             Self::Azure(profile) => profile.as_deref(),
+            #[cfg(feature = "thingsboard")]
+            Self::Thingsboard(profile) => profile.as_deref(),
         }
     }
 }
@@ -223,5 +263,6 @@ pub fn profile_completions() -> Vec<CompletionCandidate> {
         .map(CompletionCandidate::new)
         .chain(tc.az.keys_str().flatten().map(CompletionCandidate::new))
         .chain(tc.aws.keys_str().flatten().map(CompletionCandidate::new))
+        // .chain(tc.thingsboard.keys_str().flatten().map(CompletionCandidate::new)) // Not yet implemented
         .collect()
 }
