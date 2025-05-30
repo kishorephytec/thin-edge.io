@@ -16,6 +16,8 @@ use crate::cli::connect::aws::check_device_status_aws;
 use crate::cli::connect::azure::check_device_status_azure;
 #[cfg(feature = "c8y")]
 use crate::cli::connect::c8y::*;
+#[cfg(feature = "thingsboard")]
+use crate::cli::connect::thingsboard::check_device_status_thingsboard;
 use crate::cli::connect::*;
 use crate::cli::log::ConfigLogger;
 use crate::cli::log::Fancy;
@@ -479,6 +481,10 @@ impl ConnectCommand {
             Cloud::Aws(profile) => check_device_status_aws(tedge_config, profile.as_deref()).await,
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => check_device_status_c8y(tedge_config, profile.as_deref()).await,
+            #[cfg(feature = "thingsboard")]
+            Cloud::Thingsboard(profile) => {
+                check_device_status_thingsboard(tedge_config, profile.as_deref()).await
+            }
         };
         spinner.finish(res)
     }
