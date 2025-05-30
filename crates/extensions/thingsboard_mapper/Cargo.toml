@@ -5,3 +5,6 @@ edition = "2021"
 
 [dependencies]
 # TODO: Add dependencies as needed
+
+[features]
+thingsboard = []
