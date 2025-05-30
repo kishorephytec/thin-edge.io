@@ -12,10 +12,15 @@ mod renew;
 mod shift;
 mod show;
 
+#[cfg(feature = "thingsboard")]
+pub mod thingsboard;
+
 pub use self::cli::*;
 pub use self::create::*;
 pub use self::error::*;
 pub use self::shift::*;
+#[cfg(feature = "thingsboard")]
+pub use self::thingsboard::upload::upload_certificate_thingsboard;
 
 pub(crate) async fn read_cert_to_string(path: impl AsRef<Utf8Path>) -> Result<String, CertError> {
     let mut file = tokio::fs::File::open(path.as_ref()).await.map_err(|err| {
