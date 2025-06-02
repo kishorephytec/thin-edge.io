@@ -7,6 +7,8 @@ use crate::cli::connect::command::DeviceStatus;
 use crate::cli::connect::ConnectError;
 use reqwest::Client;
 use anyhow::Result;
+use serde_json::json;
+use std::env;
 
 pub async fn check_device_status_thingsboard(
     _tedge_config: &TEdgeConfig,
@@ -17,18 +19,47 @@ pub async fn check_device_status_thingsboard(
 }
 
 /// Check if the device is connected to Thingsboard by querying the device API.
-/// This is a basic implementation. Adjust endpoint and logic as per your Thingsboard setup.
-pub async fn check_device_status_thingsboard(tb_url: &str, device_id: &str, token: &str) -> Result<bool> {
-    let url = format!("{}/api/device/{}", tb_url, device_id);
+/// If not, try to onboard (register) the device using the REST API.
+pub async fn connect_and_onboard_thingsboard(
+    tb_url: &str,
+    device_name: &str,
+    access_token: &str,
+    device_type: Option<&str>,
+) -> Result<DeviceStatus, ConnectError> {
     let client = Client::new();
+    let device_url = format!("{}/api/device?deviceName={}", tb_url, device_name);
     let res = client
-        .get(&url)
-        .bearer_auth(token)
+        .get(&device_url)
+        .bearer_auth(access_token)
         .send()
-        .await?;
+        .await
+        .map_err(|e| ConnectError::Custom(format!("Failed to query device: {e}")))?;
+
     if res.status().is_success() {
-        Ok(true)
+        // Device exists
+        return Ok(DeviceStatus::Connected);
+    }
+
+    // Device does not exist, try to create (onboard) it
+    let create_url = format!("{}/api/device", tb_url);
+    let payload = json!({
+        "name": device_name,
+        "type": device_type.unwrap_or("default"),
+    });
+    let create_res = client
+        .post(&create_url)
+        .bearer_auth(access_token)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| ConnectError::Custom(format!("Failed to onboard device: {e}")))?;
+
+    if create_res.status().is_success() {
+        Ok(DeviceStatus::Connected)
     } else {
-        Ok(false)
+        Err(ConnectError::Custom(format!(
+            "Failed to onboard device: {}",
+            create_res.status()
+        )))
     }
 }
