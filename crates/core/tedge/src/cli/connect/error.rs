@@ -2,6 +2,8 @@ use rumqttc::tokio_rustls::rustls;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
+    #[error("Custom error: {0}")]
+    Custom(String),
     #[error("Couldn't load certificate: {0:#}")]
     Certificate(#[source] anyhow::Error),
 

@@ -16,6 +16,9 @@ pub enum SystemService<'a> {
     #[strum(serialize = "tedge-mapper-c8y")]
     /// Cumulocity TEdge mapper
     TEdgeMapperC8y(Option<&'a ProfileName>),
+    #[strum(serialize = "tedge-mapper-thingsboard")]
+    /// Thingsboard TEdge mapper
+    TEdgeMapperThingsboard(Option<&'a ProfileName>),
     #[strum(serialize = "tedge-agent")]
     /// TEdge SM agent
     TEdgeSMAgent,
@@ -31,6 +34,8 @@ impl fmt::Display for SystemService<'_> {
             Self::TEdgeMapperAws(Some(profile)) => write!(f, "tedge-mapper-aws@{profile}"),
             Self::TEdgeMapperC8y(None) => write!(f, "tedge-mapper-c8y"),
             Self::TEdgeMapperC8y(Some(profile)) => write!(f, "tedge-mapper-c8y@{profile}"),
+            Self::TEdgeMapperThingsboard(None) => write!(f, "tedge-mapper-thingsboard"),
+            Self::TEdgeMapperThingsboard(Some(profile)) => write!(f, "tedge-mapper-thingsboard@{profile}"),
             Self::TEdgeSMAgent => write!(f, "tedge-agent"),
         }
     }

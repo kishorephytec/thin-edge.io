@@ -85,6 +85,7 @@ pub struct ConnectCommand {
 
 pub enum DeviceStatus {
     AlreadyExists,
+    Connected,
     Unknown,
 }
 
@@ -178,18 +179,14 @@ impl ConnectCommand {
             .await
         {
             match self.check_connection(tedge_config).await {
-                Ok(DeviceStatus::AlreadyExists) => {
+                Ok(DeviceStatus::AlreadyExists) | Ok(DeviceStatus::Connected) => {
                     let cloud = bridge_config.cloud_name;
                     match self.tenant_matches_configured_url(tedge_config).await? {
-                        // Check failed, warning has been printed already
-                        // Don't tell them the connection test succeeded because that's not true
                         Some(false) => {}
-                        // Either the check succeeded or it wasn't relevant (e.g. non-Cumulocity connection)
                         Some(true) | None => {
                             println!("Connection check to {cloud} cloud is successful.")
                         }
                     }
-
                     Ok(())
                 }
                 Ok(DeviceStatus::Unknown) => Err(ConnectError::UnknownDeviceStatus.into()),
@@ -263,7 +260,6 @@ impl ConnectCommand {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => {
                 let c8y_config = tedge_config.c8y.try_get(profile.as_deref())?;
-
                 let use_basic_auth = c8y_config
                     .auth_method
                     .is_basic(&c8y_config.credentials_path);
@@ -276,6 +272,8 @@ impl ConnectCommand {
             Cloud::Aws(_) => (),
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => (),
+            #[cfg(feature = "thingsboard")]
+            Cloud::Thingsboard(_) => (),
         }
 
         Ok(())
@@ -374,7 +372,6 @@ impl ConnectCommand {
                         .new_cert_path
                         .clone_into(&mut client_config.cert_file)
                 }
-
                 create_device_with_direct_connection(
                     use_basic_auth,
                     _bridge_config,
@@ -387,6 +384,8 @@ impl ConnectCommand {
             Cloud::Aws(_) => Ok(()),
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => Ok(()),
+            #[cfg(feature = "thingsboard")]
+            Cloud::Thingsboard(_) => Ok(()),
         }
     }
 }
@@ -405,6 +404,8 @@ fn credentials_path_for<'a>(
         Cloud::Aws(_) => Ok(None),
         #[cfg(feature = "azure")]
         Cloud::Azure(_) => Ok(None),
+        #[cfg(feature = "thingsboard")]
+        Cloud::Thingsboard(_) => Ok(None),
     }
 }
 
@@ -417,7 +418,6 @@ impl ConnectCommand {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => {
                 let c8y_config = tedge_config.c8y.try_get(profile.as_deref())?;
-
                 let use_basic_auth = c8y_config
                     .auth_method
                     .is_basic(&c8y_config.credentials_path);
@@ -446,6 +446,8 @@ impl ConnectCommand {
             Cloud::Aws(_) => Ok(None),
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => Ok(None),
+            #[cfg(feature = "thingsboard")]
+            Cloud::Thingsboard(_) => Ok(None),
         }
     }
 
@@ -569,7 +571,8 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
             )?;
             disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
             disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
-        }
+        },
+        MaybeBorrowedCloud::Thingsboard(_) => { /* no special validation for thingsboard */ },
     }
     Ok(())
 }
@@ -782,7 +785,8 @@ pub fn bridge_config(
             };
 
             Ok(BridgeConfig::from(params))
-        }
+        },
+        MaybeBorrowedCloud::Thingsboard(_profile) => Err(anyhow::anyhow!("Thingsboard bridge config not implemented").into()),
     }
 }
 
@@ -848,6 +852,8 @@ impl ConnectCommand {
             Cloud::Aws(_) => (),
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => (),
+            #[cfg(feature = "thingsboard")]
+            Cloud::Thingsboard(_) => (),
         }
 
         if let Err(err) =

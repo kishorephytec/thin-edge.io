@@ -8,6 +8,8 @@ mod aws;
 mod azure;
 #[cfg(feature = "c8y")]
 mod c8y;
+#[cfg(feature = "thingsboard")]
+mod thingsboard;
 mod cli;
 mod command;
 mod error;

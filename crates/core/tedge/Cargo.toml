@@ -80,11 +80,13 @@ tokio = { workspace = true }
 x509-parser = { workspace = true }
 
 
+
 [features]
-default = ["aws", "azure", "c8y"]
+default = ["aws", "azure", "c8y", "thingsboard"]
 aws = ["tedge-mapper/aws"]
 azure = ["tedge-mapper/azure"]
 c8y = ["tedge-mapper/c8y"]
+thingsboard = []
 integration-test = []
 
 [lints]
