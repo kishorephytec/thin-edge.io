@@ -786,7 +786,25 @@ pub fn bridge_config(
 
             Ok(BridgeConfig::from(params))
         },
-        MaybeBorrowedCloud::Thingsboard(_profile) => Err(anyhow::anyhow!("Thingsboard bridge config not implemented").into()),
+        MaybeBorrowedCloud::Thingsboard(profile) => {
+            let tb_config = config.thingsboard.try_get(profile.as_deref())?;
+            let params = crate::bridge::thingsboard::BridgeConfigThingsboardParams {
+                mqtt_host: tedge_config::models::HostPort::try_from(tb_config.url.or_config_not_set()?.as_str())
+                    .map_err(tedge_config::TEdgeConfigError::from)?,
+                config_file: cloud.bridge_config_filename(),
+                bridge_root_cert_path: tb_config.root_cert_path.clone().into(),
+                remote_clientid: tb_config.device.id()?.clone(),
+                bridge_certfile: tb_config.device.cert_path.clone().into(),
+                bridge_keyfile: tb_config.device.key_path.clone().into(),
+                bridge_location,
+                topic_prefix: tb_config.bridge.topic_prefix.clone(),
+                profile_name: profile.clone().map(Cow::into_owned),
+                mqtt_schema,
+                keepalive_interval: tb_config.bridge.keepalive_interval.duration(),
+                proxy,
+            };
+            Ok(crate::bridge::BridgeConfig::from(params))
+        }
     }
 }
 
