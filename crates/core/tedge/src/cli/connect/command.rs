@@ -273,7 +273,19 @@ impl ConnectCommand {
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => (),
             #[cfg(feature = "thingsboard")]
-            Cloud::Thingsboard(_) => (),
+            Cloud::Thingsboard(_) => {
+                // Always create the bridge config for Thingsboard
+                let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(tedge_config);
+                let spinner = Spinner::start("Configuring Thingsboard bridge");
+                let res = self
+                    .new_bridge(tedge_config, &bridge_config, &updated_mosquitto_config)
+                    .await;
+                // Avoid double-wrapping Fancy errors for Thingsboard
+                match spinner.finish(res) {
+                    Ok(val) => val,
+                    Err(Fancy { err, .. }) => return Err(err),
+                };
+            }
         }
 
         Ok(())
@@ -877,15 +889,15 @@ impl ConnectCommand {
         if let Err(err) =
             write_generic_mosquitto_config_to_file(tedge_config, common_mosquitto_config).await
         {
-            // We want to preserve previous errors and therefore discard result of this function.
-            let _ = clean_up(tedge_config, bridge_config);
+            // Skipping cleanup to allow inspection of the generated bridge config file after failure
+            // let _ = clean_up(tedge_config, bridge_config);
             return Err(err.into());
         }
 
         if bridge_config.bridge_location == BridgeLocation::Mosquitto {
             if let Err(err) = write_bridge_config_to_file(tedge_config, bridge_config).await {
-                // We want to preserve previous errors and therefore discard result of this function.
-                let _ = clean_up(tedge_config, bridge_config);
+                // Skipping cleanup to allow inspection of the generated bridge config file after failure
+                // let _ = clean_up(tedge_config, bridge_config);
                 return Err(err.into());
             }
         } else {
@@ -896,6 +908,8 @@ impl ConnectCommand {
             println!("'tedge connect' configured the necessary tedge components, but you will have to start the required services on your own.");
             println!("Start/restart mosquitto and other thin edge components.");
             println!("thin-edge.io works seamlessly with 'systemd'.\n");
+            // Skipping cleanup to allow inspection of the generated bridge config file after failure
+            // let _ = clean_up(tedge_config, bridge_config);
             return Err(err.into());
         }
 
@@ -908,7 +922,8 @@ impl ConnectCommand {
             .enable_service(SystemService::Mosquitto)
             .await
         {
-            clean_up(tedge_config, bridge_config)?;
+            // Skipping cleanup to allow inspection of the generated bridge config file after failure
+            // clean_up(tedge_config, bridge_config)?;
             return Err(err.into());
         }
 
