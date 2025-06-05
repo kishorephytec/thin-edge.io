@@ -2,7 +2,7 @@
 
 # Thin Edge Documentation: Writer Guidelines
 
-## How to generate the documentations regarding Thin Edge
+## How to generate the documentations regarding Thin Edge Source
 
 The documentation is generated using [Docusaurus 2](https://docusaurus.io/).
 
