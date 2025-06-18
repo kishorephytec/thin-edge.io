@@ -519,12 +519,24 @@ impl ConnectCommand {
     }
 
     async fn start_mapper(&self) {
-        if which_async("tedge-mapper").await.is_err() {
-            warning!("tedge-mapper is not installed.");
+        // Determine the correct mapper binary for the selected cloud
+        let (binary_name, service) = match &self.cloud {
+            #[cfg(feature = "aws")]
+            Cloud::Aws(_) => ("tedge-mapper-aws", self.cloud.mapper_service()),
+            #[cfg(feature = "azure")]
+            Cloud::Azure(_) => ("tedge-mapper-az", self.cloud.mapper_service()),
+            #[cfg(feature = "c8y")]
+            Cloud::C8y(_) => ("tedge-mapper-c8y", self.cloud.mapper_service()),
+            #[cfg(feature = "thingsboard")]
+            Cloud::Thingsboard(_) => ("tedge-mapper-thingsboard", self.cloud.mapper_service()),
+        };
+
+        if which_async(binary_name).await.is_err() {
+            warning!("{} is not installed.", binary_name);
         } else {
-            let spinner = Spinner::start(format!("Enabling {}", self.cloud.mapper_service()));
+            let spinner = Spinner::start(format!("Enabling {}", service));
             let _ = spinner.finish(
-                start_and_enable_service(&*self.service_manager, self.cloud.mapper_service()).await,
+                start_and_enable_service(&*self.service_manager, service).await,
             );
         }
     }
