@@ -1,24 +1,54 @@
 // Thingsboard connection logic stub
 // TODO: Implement actual connection check and logic
 
+
 use tedge_config::TEdgeConfig;
 use tedge_config::tedge_toml::ProfileName;
 use crate::cli::connect::command::DeviceStatus;
 use crate::cli::connect::ConnectError;
-use reqwest::Client;
 use anyhow::Result;
+use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS, Transport, TlsConfiguration};
+use std::time::Duration;
+use tokio::time::timeout;
+use std::fs;
 use serde_json::json;
-use std::env;
+use reqwest::Client;
+
 
 pub async fn check_device_status_thingsboard(
     tedge_config: &TEdgeConfig,
     profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
     println!("[DEBUG] Entered check_device_status_thingsboard");
-    let tb_config = tedge_config.thingsboard.try_get(profile)?;
-    println!("[DEBUG] Loaded Thingsboard config: url={:?}, device.id={:?}", tb_config.url, tb_config.device.id());
-    // For now, always return Connected so the bridge config is created
-    Ok(DeviceStatus::Connected)
+    let client_id = "localPC"; // Use the CN from your cert
+    let mut mqtt_options = tedge_config
+        .mqtt_config()?
+        .with_session_name(client_id)
+        .rumqttc_options()?;
+    mqtt_options.set_keep_alive(Duration::from_secs(10));
+
+    let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
+    // Try to subscribe to a Thingsboard topic
+    let topic = "v1/devices/me/attributes";
+    client.subscribe(topic, QoS::AtLeastOnce).await.map_err(|e| ConnectError::Custom(format!("MQTT subscribe failed: {e}")))?;
+
+    // Wait for SUBACK or error
+    let check = timeout(Duration::from_secs(5), async {
+        loop {
+            match event_loop.poll().await {
+                Ok(Event::Incoming(Packet::SubAck(_))) => return Ok(()),
+                Ok(Event::Incoming(Packet::ConnAck(_))) => {},
+                Ok(_) => {},
+                Err(e) => return Err(e),
+            }
+        }
+    }).await;
+
+    match check {
+        Ok(Ok(())) => Ok(DeviceStatus::Connected),
+        Ok(Err(e)) => Err(ConnectError::Custom(format!("MQTT error: {e}"))),
+        Err(_) => Err(ConnectError::Custom("MQTT connection check timed out".to_string())),
+    }
 }
 
 /// Check if the device is connected to Thingsboard by querying the device API.
