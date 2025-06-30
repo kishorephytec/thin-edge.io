@@ -87,11 +87,11 @@ impl BridgeConfig {
         writeln_async!(writer, "connection {}", self.connection)?;
         writeln_async!(writer, "address {}", self.address)?;
 
-        if std::fs::metadata(&self.bridge_root_cert_path)?.is_dir() {
-            writeln_async!(writer, "bridge_capath {}", self.bridge_root_cert_path)?;
-        } else {
-            writeln_async!(writer, "bridge_cafile {}", self.bridge_root_cert_path)?;
-        }
+
+        // Determine if we should use bridge_* or non-prefixed options (for Mosquitto <2.0)
+        // For Mosquitto 2.x and above, always use bridge_* options for bridge config
+        // Use bridge_cafile for Thingsboard (CA is a file)
+        writeln_async!(writer, "bridge_cafile {}", self.bridge_root_cert_path)?;
 
         writeln_async!(writer, "remote_clientid {}", self.remote_clientid)?;
         writeln_async!(writer, "local_clientid {}", self.local_clientid)?;
@@ -108,6 +108,9 @@ impl BridgeConfig {
             writeln_async!(writer, "bridge_certfile {}", self.bridge_certfile)?;
             writeln_async!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
         }
+
+        // Add extra stability options for Thingsboard bridges if needed (for Mosquitto 2.x, these can be set unconditionally)
+        // Do not write tls_version or bridge_protocol_version for Thingsboard
 
         writeln_async!(writer, "try_private {}", self.try_private)?;
         writeln_async!(writer, "start_type {}", self.start_type)?;

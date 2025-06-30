@@ -40,18 +40,12 @@ impl From<BridgeConfigThingsboardParams> for BridgeConfig {
             proxy,
         } = params;
 
+        // ...existing code for extracting params...
         let service_name = format!("mosquitto-{}-bridge", topic_prefix);
         let health = mqtt_schema.topic_for(
             &EntityTopicId::default_main_service(&service_name).unwrap(),
             &Channel::Health,
         );
-
-        // Thingsboard topics: forward all telemetry and attributes
-        let pub_msg_topic = format!("te/+/+/+/+/m/+ out 1 {}/", topic_prefix);
-        let attr_msg_topic = format!("te/+/+/+/+/a/+ out 1 {}/", topic_prefix);
-        let event_msg_topic = format!("te/+/+/+/+/e/+ out 1 {}/", topic_prefix);
-        let health_topic = format!("{} in 1 {}/", health.name, topic_prefix);
-
         Self {
             cloud_name: "thingsboard".into(),
             config_file,
@@ -65,7 +59,11 @@ impl From<BridgeConfigThingsboardParams> for BridgeConfig {
             remote_password: None,
             bridge_root_cert_path,
             remote_clientid: remote_clientid.clone(),
-            local_clientid: "Thingsboard".into(),
+            local_clientid: if let Some(profile) = &profile_name {
+                format!("Thingsboard@{profile}")
+            } else {
+                "Thingsboard".into()
+            },
             bridge_certfile,
             bridge_keyfile,
             bridge_location,
@@ -73,14 +71,20 @@ impl From<BridgeConfigThingsboardParams> for BridgeConfig {
             use_agent: false,
             try_private: false,
             start_type: "automatic".into(),
-            clean_session: true,
+            clean_session: false,
             include_local_clean_session: false,
             local_clean_session: false,
             notifications: true,
             notifications_local_only: true,
             notification_topic: health.name,
             bridge_attempt_unsubscribe: false,
-            topics: vec![pub_msg_topic, attr_msg_topic, event_msg_topic, health_topic],
+            topics: vec![
+                "v1/devices/me/telemetry out 1".to_string(),
+                "v1/devices/me/attributes out 1".to_string(),
+                "v1/devices/me/attributes/response/+ in 1".to_string(),
+                "v1/devices/me/rpc/request/+ in 1".to_string(),
+                "v1/devices/me/rpc/response/+ out 1".to_string(),
+            ],
             connection_check_attempts: 3,
             auth_type: tedge_config::models::auth_method::AuthType::Certificate,
             mosquitto_version: None,
